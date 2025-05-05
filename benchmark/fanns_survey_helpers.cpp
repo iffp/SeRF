@@ -141,3 +141,20 @@ void peak_memory_footprint()
     info.close();
 }
 
+
+std::vector<int> parse_int_list(const std::string& input) {
+    std::string cleaned = input;
+    cleaned.erase(std::remove_if(cleaned.begin(), cleaned.end(),
+                  [](char c) { return c == '[' || c == ']'; }),
+                  cleaned.end());
+
+    std::vector<int> result;
+    std::stringstream ss(cleaned);
+    std::string token;
+
+    while (std::getline(ss, token, ',')) {
+        result.push_back(std::stoi(token));
+    }
+
+    return result;
+}

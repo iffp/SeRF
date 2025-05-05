@@ -83,8 +83,10 @@ int main(int argc, char **argv) {
 	index_k = atoi(argv[6]);
 	ef_construction = atoi(argv[7]);
 	ef_max = atoi(argv[8]);
-	ef_search_list = str2vec(argv[9]);
+	ef_search_list = parse_int_list(argv[9]);
 	k = atoi(argv[10]);
+
+
 	
     // Load database vectors
     vector<vector<float>> database_vectors = read_fvecs(path_database_vectors);
@@ -145,9 +147,6 @@ int main(int argc, char **argv) {
     // Compute duration 
     std::chrono::duration<double> diff = end_time - start_time;
     double index_construction_time = diff.count();
-
-    // Report statistics
-    peak_memory_footprint(); // This is for index construction only, not for query execution
 
 	// Configure search
 	BaseIndex::SearchParams s_params;
