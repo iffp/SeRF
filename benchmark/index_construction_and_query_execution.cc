@@ -111,21 +111,27 @@ int main(int argc, char **argv) {
     assert(groundtruth.size() == n_queries);
 
     // Truncate ground-truth to at most k items
-	// TODO: How does SeRF behave if we have less than k matches for a given query?
+	// How does SeRF behave if we have less than k matches for a given query? -> Doesn't seem to be a problem
     for (std::vector<int>& vec : groundtruth) {
         if (vec.size() > k) {
             vec.resize(k);
         }
     }
 
+	// Sort the database by attribute value and remap the groundtruth accordingly
+	// Withouth this step, SeRF doesn't work
+	// TODO: Should this step also be timed for benchmarking?
+	sort_by_attribute_and_remap(database_vectors, database_attributes, groundtruth);
+
 	// Initialize a data wrapper (needed by SeRF)
 	// query_num and query_k are not used in in index construction as they are only needed during query execution
 	// the dataset parameter is also not used as we manually load the data
-	// TODO: What about query_keys and query_ids?
+	// NOTE: querys_keys doesn't seem to appear anywhere in the code except for /include/common/data_wrapper.h
+	// NOTE: query_ids seems to allow some reordering of query id's but I don't think it is needed.
 	DataWrapper data_wrapper(n_queries, k, "custom", n_items);
 	data_wrapper.version = "Benchmark";		// Is this used? I don't think so
 	data_wrapper.data_dim = d;				
-	data_wrapper.real_keys = true;			// TODO: Do we need to sort data vectors by key?
+	data_wrapper.real_keys = false;			// Is this used? I don't think so
 	data_wrapper.nodes = database_vectors;	
 	data_wrapper.nodes_keys = database_attributes;	
 	data_wrapper.querys = query_vectors;
@@ -196,7 +202,7 @@ int main(int argc, char **argv) {
 	peak_memory_footprint();
 	printf("Index construction time: %.3f s\n", index_construction_time);
 	for (int i = 0; i < ef_search_list.size(); i++) {
-		printf("ef_search: %d, QPS: %.3f, Recall: %.3f\n", ef_search_list[i], qps_list[i], recall_list[i]);
+		printf("ef_search: %d QPS: %.3f Recall: %.3f\n", ef_search_list[i], qps_list[i], recall_list[i]);
 	}
 	return 0;
 }

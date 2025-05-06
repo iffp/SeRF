@@ -5,6 +5,9 @@
 #include <iostream>
 #include <algorithm>
 #include <unistd.h>
+#include <numeric>
+#include <unordered_map>
+
 
 
 std::vector<std::vector<float>> read_fvecs(const std::string& filename) {
@@ -120,8 +123,7 @@ std::vector<std::pair<int, int>> read_two_ints_per_line(const std::string& filen
     return result;
 }
 
-void peak_memory_footprint()
-{
+void peak_memory_footprint() {
     unsigned iPid = (unsigned)getpid();
 
     std::cout << "PID: " << iPid << std::endl;
@@ -158,3 +160,47 @@ std::vector<int> parse_int_list(const std::string& input) {
 
     return result;
 }
+
+#include <vector>
+#include <numeric>
+#include <algorithm>
+#include <unordered_map>
+
+void sort_by_attribute_and_remap(std::vector<std::vector<float>>& database_vectors, std::vector<int>& database_attributes, std::vector<std::vector<int>>& groundtruth) {
+    // Step 1: Create indices
+    std::vector<std::size_t> indices(database_attributes.size());
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // Step 2: Sort indices by attribute values
+    std::sort(indices.begin(), indices.end(), [&](std::size_t i, std::size_t j) {
+        return database_attributes[i] < database_attributes[j];
+    });
+
+    // Step 3: Build old-to-new index map
+    std::unordered_map<int, int> old_to_new;
+    for (std::size_t new_idx = 0; new_idx < indices.size(); ++new_idx) {
+        old_to_new[indices[new_idx]] = static_cast<int>(new_idx);
+    }
+
+    // Step 4: Apply sorting to database_vectors and database_attributes
+    std::vector<std::vector<float>> sorted_vectors(indices.size());
+    std::vector<int> sorted_attributes(indices.size());
+
+    for (std::size_t new_idx = 0; new_idx < indices.size(); ++new_idx) {
+        std::size_t old_idx = indices[new_idx];
+        sorted_vectors[new_idx] = std::move(database_vectors[old_idx]);
+        sorted_attributes[new_idx] = database_attributes[old_idx];
+    }
+
+    // Step 5: Remap groundtruth indices
+    for (auto& vec : groundtruth) {
+        for (auto& idx : vec) {
+            idx = old_to_new[idx];
+        }
+    }
+
+    // Step 6: Replace original vectors
+    database_vectors = std::move(sorted_vectors);
+    database_attributes = std::move(sorted_attributes);
+}
+
