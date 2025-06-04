@@ -7,8 +7,10 @@
 #include <unistd.h>
 #include <numeric>
 #include <unordered_map>
-
-
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include "global_thread_counter.h"
 
 std::vector<std::vector<float>> read_fvecs(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -161,11 +163,6 @@ std::vector<int> parse_int_list(const std::string& input) {
     return result;
 }
 
-#include <vector>
-#include <numeric>
-#include <algorithm>
-#include <unordered_map>
-
 void sort_by_attribute_and_remap(std::vector<std::vector<float>>& database_vectors, std::vector<int>& database_attributes, std::vector<std::vector<int>>& groundtruth) {
     // Step 1: Create indices
     std::vector<std::size_t> indices(database_attributes.size());
@@ -202,5 +199,29 @@ void sort_by_attribute_and_remap(std::vector<std::vector<float>>& database_vecto
     // Step 6: Replace original vectors
     database_vectors = std::move(sorted_vectors);
     database_attributes = std::move(sorted_attributes);
+}
+
+
+// Read current thread count from /proc/self/status
+int get_thread_count() {
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.rfind("Threads:", 0) == 0) {
+            return std::stoi(line.substr(8));
+        }
+    }
+    return -1;
+}
+
+// Background monitor that updates peak thread count
+void monitor_thread_count(std::atomic<bool>& done_flag) {
+    while (!done_flag) {
+        int current = get_thread_count();
+        if (current > peak_threads) {
+            peak_threads = current;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 

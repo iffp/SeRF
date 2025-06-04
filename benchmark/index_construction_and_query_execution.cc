@@ -30,15 +30,20 @@
 #endif
 
 // FANNS survey
-#include <chrono>
 #include <thread>
+#include <atomic>
+#include <omp.h>
 #include "fanns_survey_helpers.cpp"
+#include "global_thread_counter.h"
 
 using std::cout;
 using std::endl;
 using std::string;
 using std::to_string;
 using std::vector;
+
+// Global atomic to store peak thread count
+std::atomic<int> peak_threads(1);
 
 int main(int argc, char **argv) {
 	#ifdef USE_SSE
@@ -53,8 +58,15 @@ int main(int argc, char **argv) {
 	#ifndef NO_PARALLEL_BUILD
 	  cout << "Index Construct Parallelly" << endl;
 	#endif
+
+    // Get number of WH threads and use that number of threads for the index construction
     unsigned int nthreads = std::thread::hardware_concurrency();
-    std::cout << "Number of threads: " << nthreads << std::endl;
+    omp_set_num_threads(nthreads);
+
+    // Prepare thread monitoring for index construction
+	std::atomic<bool> done1(false);
+	peak_threads = get_thread_count();
+	std::thread monitor1(monitor_thread_count, std::ref(done1));
 
 	// Parameters
 	string path_database_vectors;
@@ -150,6 +162,16 @@ int main(int argc, char **argv) {
     serf_index.buildIndex(&i_params);
 	auto end_time = std::chrono::high_resolution_clock::now();
 
+    // Stop thread monitoring, reset the peak thread count to zero
+	done1 = true;
+	monitor1.join();
+	int index_construction_threads = peak_threads.load();
+
+	// Prepare thread monitoring for query execution
+	std::atomic<bool> done2(false);
+	peak_threads = get_thread_count();  // Reset again
+	std::thread monitor2(monitor_thread_count, std::ref(done2));
+
     // Compute duration 
     std::chrono::duration<double> diff = end_time - start_time;
     double index_construction_time = diff.count();
@@ -198,8 +220,15 @@ int main(int argc, char **argv) {
 		qps_list.push_back(qps);
 	}
 
+	// Stop thread monitoring
+	done2 = true;
+	monitor2.join();	
+	int query_execution_threads = peak_threads.load();
+
 	// Report results   
 	peak_memory_footprint();
+	printf("Maximum number of threads during index construction: %d\n", index_construction_threads-1);	// Subtract 1 because of the monitoring thread
+	printf("Maximum number of threads during query execution: %d\n", query_execution_threads-1);		// Subtract 1 because of the monitoring thread
 	printf("Index construction time: %.3f s\n", index_construction_time);
 	for (int i = 0; i < ef_search_list.size(); i++) {
 		printf("ef_search: %d QPS: %.3f Recall: %.3f\n", ef_search_list[i], qps_list[i], recall_list[i]);
